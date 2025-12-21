@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using Vortice.Direct2D1;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Player.Video;
@@ -40,21 +41,29 @@ namespace YMM4LUT
         {
             if (effect is null) return effectDescription.DrawDescription;
 
-            if (currentLutPath != item.LUTPath && !string.IsNullOrEmpty(item.LUTPath) && File.Exists(item.LUTPath))
+            // パスが変わった時のみ処理を行う (File.Existsは重いため最小限にする)
+            if (currentLutPath != item.LUTPath)
             {
-                var lutData = CubeParser.Parse(item.LUTPath);
-                if (lutData != null)
+                currentLutPath = item.LUTPath;
+                if (!string.IsNullOrEmpty(currentLutPath) && File.Exists(currentLutPath))
                 {
-                    effect.SetLUTTexture(lutData);
-                    currentLutPath = item.LUTPath;
+                    var lutData = CubeParser.Parse(currentLutPath);
+                    if (lutData != null)
+                    {
+                        effect.SetLUTTexture(lutData);
+                    }
                 }
             }
 
             var frame = effectDescription.ItemPosition.Frame;
             var value = item.Value.GetValue(frame, effectDescription.ItemDuration.Frame, effectDescription.FPS) / 100.0;
 
-            if (isFirst || this.value != value) effect.Value = (float)value;
-            isFirst = false; this.value = value;
+            if (isFirst || this.value != value)
+            {
+                effect.Value = (float)value;
+                isFirst = false;
+                this.value = value;
+            }
 
             return effectDescription.DrawDescription;
         }

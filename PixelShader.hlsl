@@ -8,6 +8,7 @@ cbuffer constants : register(b0)
 {
     float value : packoffset(c0.x);   // 強度
     float lutSize : packoffset(c0.y); // LUTサイズ
+    float is3D : packoffset(c0.z);    // 1D=0, 3D=1
 }; 
 
 float4 main(
@@ -18,16 +19,16 @@ float4 main(
 {
     float4 rawColor = InputTexture.Sample(InputSampler, uv0.xy);
     
+    // アルファ値が0なら即終了
     if (rawColor.a <= 0.0)
         return float4(0, 0, 0, 0);
     
+    // 強度が0なら元の色を返す
     if (value <= 0.0)
         return rawColor;
     
-    float3 pureColor = rawColor.rgb / rawColor.a;
-
-    // --- ここからLUT処理 ---
-    
+    // Unmultiply: ゼロ除算防止のためのmax
+    float3 pureColor = rawColor.rgb / max(rawColor.a, 0.00001);
     float3 originalColor = saturate(pureColor);
 
     // ハーフテクセル補正
@@ -35,16 +36,25 @@ float4 main(
     float offset = 0.5 / lutSize;
     float3 lutCoord = originalColor * scale + offset;
     
-    // 3D LUTサンプリング
-    float3 lutColor = LutTexture.Sample(LutSampler, lutCoord).rgb;
+    float3 lutColor;
+    if (is3D > 0.5)
+    {
+        // 3D LUTサンプリング
+        lutColor = LutTexture.Sample(LutSampler, lutCoord).rgb;
+    }
+    else
+    {
+        // 1D LUTサンプリング: RGB各チャンネルを個別にサンプリング
+        // 1Dテクスチャを (Size, 1, 1) の 3Dとして扱っているため Y, Z は 0.5
+        float r = LutTexture.Sample(LutSampler, float3(lutCoord.r, 0.5, 0.5)).r;
+        float g = LutTexture.Sample(LutSampler, float3(lutCoord.g, 0.5, 0.5)).g;
+        float b = LutTexture.Sample(LutSampler, float3(lutCoord.b, 0.5, 0.5)).b;
+        lutColor = float3(r, g, b);
+    }
     
-    // 強度によるブレンド (Unmultiplyされた空間で行う)
+    // 強度によるブレンド
     float3 blendedColor = lerp(pureColor, lutColor, value);
 
-    // --- LUT処理ここまで ---
-
-    // 2. Remultiply: 再びアルファを掛けてPremultiplied Alphaの状態に戻す
-    float3 finalColor = blendedColor * rawColor.a;
-    
-    return float4(finalColor, rawColor.a);
+    // Remultiply: 再びアルファを掛ける
+    return float4(blendedColor * rawColor.a, rawColor.a);
 }

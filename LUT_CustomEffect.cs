@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 using Vortice.Direct2D1;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Player.Video;
@@ -44,6 +45,7 @@ namespace YMM4LUT
             {
                 constantBuffer.Value = 1.0f;
                 constantBuffer.LutSize = 33.0f;
+                constantBuffer.Is3D = 1.0f;
                 LastCreatedInstance = this;
             }
 
@@ -51,9 +53,10 @@ namespace YMM4LUT
             {
                 lutData = data;
                 lutDataPending = true;
-                constantBuffer.LutSize = data.Size;
+                constantBuffer.LutSize = (float)data.Size;
+                constantBuffer.Is3D = data.Is3D ? 1.0f : 0.0f;
                 UpdateConstants();
-                if (effectContext != null && drawInformation != null)
+                if (effectContext != null)
                     CreateLUTResourceTexture();
             }
 
@@ -78,14 +81,18 @@ namespace YMM4LUT
 
             private void CreateLUTResourceTexture()
             {
-                if (lutData == null || effectContext == null)
-                    return;
+                if (lutData == null || effectContext == null) return;
 
                 lutResourceTexture?.Dispose();
 
                 unsafe
                 {
-                    uint[] extents = [(uint)lutData.Size, (uint)lutData.Size, (uint)lutData.Size];
+                    // 1D LUTの場合も (Size, 1, 1) の 3Dテクスチャとして作成し、シェーダー側の互換性を保つ
+                    uint width = (uint)lutData.Size;
+                    uint height = (uint)(lutData.Is3D ? lutData.Size : 1);
+                    uint depth = (uint)(lutData.Is3D ? lutData.Size : 1);
+
+                    uint[] extents = [width, height, depth];
                     fixed (uint* extentsPtr = extents)
                     {
                         ExtendMode[] extendModes = [ExtendMode.Clamp, ExtendMode.Clamp, ExtendMode.Clamp];
@@ -95,15 +102,16 @@ namespace YMM4LUT
                             {
                                 Extents = (IntPtr)extentsPtr,
                                 Dimensions = 3,
-                                BufferPrecision = (BufferPrecision)5,
-                                ChannelDepth = (ChannelDepth)4,
-                                Filter = Vortice.Direct2D1.Filter.MinMagMipLinear,
+                                BufferPrecision = (BufferPrecision)5, // Precision32Float
+                                ChannelDepth = (ChannelDepth)4,       // FourChannels
+                                Filter = Filter.MinMagMipLinear,
                                 ExtendModes = (IntPtr)extendModesPtr
                             };
 
+                            // ストライド計算 (RGBA float = 16 bytes)
                             int[] strides = [
-                                lutData.Size * 16,
-                                lutData.Size * lutData.Size * 16
+                                (int)width * 16,
+                                (int)(width * height * 16)
                             ];
 
                             lutResourceTexture = effectContext.CreateResourceTexture(
@@ -124,8 +132,7 @@ namespace YMM4LUT
                 if (drawInformation == null) return;
                 
                 var buffer = constantBuffer;
-                if (lutData == null)
-                    buffer.Value = 0.0f;
+                if (lutData == null) buffer.Value = 0.0f;
                 
                 drawInformation.SetPixelShaderConstantBuffer(buffer);
             }
@@ -141,6 +148,8 @@ namespace YMM4LUT
             {
                 public float Value;
                 public float LutSize;
+                public float Is3D;
+                public float Padding;
             }
             public enum Properties { Value = 0 }
         }

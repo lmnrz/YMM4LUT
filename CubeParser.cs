@@ -6,6 +6,7 @@ namespace YMM4LUT
     internal class LUTData
     {
         public int Size { get; set; }
+        public bool Is3D { get; set; }
         public byte[] Data { get; set; } = [];
     }
 
@@ -14,19 +15,27 @@ namespace YMM4LUT
         public static LUTData? Parse(string path)
         {
             int size = 0;
-            var colorList = new List<float>(262144 * 4);
+            bool is3D = true;
+            var colorList = new List<float>();
 
             using (var reader = new StreamReader(path))
             {
                 string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    if (line.Length == 0 || line[0] == '#') continue;
+                    line = line.Trim();
+                    if (string.IsNullOrEmpty(line) || line.StartsWith("#")) continue;
 
                     if (line.StartsWith("LUT_3D_SIZE"))
                     {
                         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length >= 2) size = int.Parse(parts[1]);
+                        if (parts.Length >= 2) { size = int.Parse(parts[1]); is3D = true; }
+                        continue;
+                    }
+                    if (line.StartsWith("LUT_1D_SIZE"))
+                    {
+                        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length >= 2) { size = int.Parse(parts[1]); is3D = false; }
                         continue;
                     }
 
@@ -40,20 +49,20 @@ namespace YMM4LUT
                             colorList.Add(r);
                             colorList.Add(g);
                             colorList.Add(b);
-                            colorList.Add(1.0f);
+                            colorList.Add(1.0f); // RGBA形式
                         }
                     }
                 }
             }
 
-            if (size == 0 || colorList.Count < size * size * size * 4) return null;
+            long expectedElements = is3D ? (long)size * size * size * 4 : (long)size * 4;
+            if (size == 0 || colorList.Count < expectedElements) return null;
 
-            // float配列をbyte配列に変換（3Dデータのまま）
             float[] dataArray = colorList.ToArray();
             byte[] byteArray = new byte[dataArray.Length * 4];
             Buffer.BlockCopy(dataArray, 0, byteArray, 0, byteArray.Length);
 
-            return new LUTData { Size = size, Data = byteArray };
+            return new LUTData { Size = size, Is3D = is3D, Data = byteArray };
         }
     }
 }
