@@ -55,8 +55,11 @@ namespace YMM4LUT
                 }
             }
 
+            // 不正なファイルのチェック：sizeが0または不十分なデータ
+            if (size == 0) return null;
+            
             long expectedElements = is3D ? (long)size * size * size * 4 : (long)size * 4;
-            if (size == 0 || colorList.Count < expectedElements) return null;
+            if (colorList.Count < expectedElements) return null;
 
             float[] dataArray = colorList.ToArray();
             byte[] byteArray = new byte[dataArray.Length * 4];

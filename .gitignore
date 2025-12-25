@@ -1,6 +1,12 @@
 # Build results
-bin/
-obj/
+YMM4LUT/bin/
+YMM4LUT/obj/
 
 # VS Code workspace
 *.code-workspace
+
+# Shader Binary
+*.cso
+
+# User-specific project settings
+*.csproj.user
