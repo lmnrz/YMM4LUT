@@ -10,3 +10,6 @@ YMM4LUT/obj/
 
 # User-specific project settings
 *.csproj.user
+
+# .serena
+.*/
